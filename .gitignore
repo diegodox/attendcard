@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+*.sqlite
+npm-debug.log*
+.DS_Store
+
+# SQLite write-ahead log files
+*-journal
+*-shm
+*-wal
