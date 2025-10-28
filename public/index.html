@@ -1,38 +1,365 @@
 <!DOCTYPE html>
 <html lang="ja">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Attend Card</title>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AttendCard - 出席管理</title>
     <style>
-      body {
-        font-family: system-ui, sans-serif;
-        margin: 0;
-        padding: 2rem;
-        background: #f5f5f5;
-      }
-      main {
-        max-width: 640px;
-        margin: 0 auto;
-        background: white;
-        border-radius: 12px;
-        padding: 2rem;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-      }
-      h1 {
-        margin-top: 0;
-      }
-      p {
-        line-height: 1.6;
-      }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin: 0;
+        }
+
+        .date {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .countdown-timer {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            padding: 8px 16px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .countdown-timer:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        .countdown-label {
+            font-size: 0.7em;
+            opacity: 0.8;
+            margin-bottom: 2px;
+        }
+
+        .countdown-time {
+            font-size: 1.2em;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+
+        .summary {
+            background: #f8f9fa;
+            padding: 30px;
+            display: flex;
+            justify-content: space-around;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .summary-item {
+            text-align: center;
+        }
+
+        .summary-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .summary-label {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+
+        .attend .summary-number { color: #28a745; }
+        .absent .summary-number { color: #dc3545; }
+        .pending .summary-number { color: #ffc107; }
+        .total .summary-number { color: #6f42c1; }
+
+        .members {
+            padding: 30px;
+        }
+
+        .member-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .member-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .member-card.attending {
+            border-color: #28a745;
+            background: #f8fff9;
+        }
+
+        .member-card.absent {
+            border-color: #dc3545;
+            background: #fff8f8;
+        }
+
+        .member-name {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .member-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 80px;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+        }
+
+        .btn-attend {
+            background: #dee2e6;
+            color: #6c757d;
+            border: 1px solid #dee2e6;
+        }
+
+        .btn-attend:hover {
+            background: #c8d1db;
+        }
+
+        .btn-attend.active {
+            background: #28a745;
+            color: white;
+            border: 1px solid #28a745;
+            box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.3);
+        }
+
+        .btn-absent {
+            background: #dee2e6;
+            color: #6c757d;
+            border: 1px solid #dee2e6;
+        }
+
+        .btn-absent:hover {
+            background: #c8d1db;
+        }
+
+        .btn-absent.active {
+            background: #dc3545;
+            color: white;
+            border: 1px solid #dc3545;
+            box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.3);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #6c757d;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+            display: inline-block;
+        }
+
+        .status-attend { background: #28a745; }
+        .status-absent { background: #dc3545; }
+        .status-pending { background: #dee2e6; }
+
+        .add-member-section {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .btn-add-member {
+            background: #667eea;
+            color: white;
+            border: 2px dashed #667eea;
+            border-radius: 10px;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: transparent;
+            color: #667eea;
+        }
+
+        .btn-add-member:hover {
+            background: #667eea;
+            color: white;
+            transform: scale(1.05);
+        }
+
+        .btn-delete {
+            background: transparent;
+            color: #dc3545;
+            border: none;
+            padding: 5px;
+            font-size: 1.2em;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-delete:hover {
+            background: #dc3545;
+            color: white;
+        }
+
+        .member-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+            
+            .header {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .summary {
+                padding: 20px;
+                flex-wrap: wrap;
+                gap: 20px;
+            }
+            
+            .member-card {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+            
+            .member-buttons {
+                justify-content: center;
+            }
+
+            .header-top {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .countdown-timer {
+                padding: 6px 12px;
+            }
+
+            .countdown-label {
+                font-size: 0.6em;
+            }
+
+            .countdown-time {
+                font-size: 1em;
+            }
+        }
     </style>
-  </head>
-  <body>
-    <main>
-      <h1>Attend Card Service</h1>
-      <p>
-        This container hosts the Fastify + Socket.IO backend. Use the HTTP APIs and WebSocket events described in the project documentation to interact with rooms.
-      </p>
-    </main>
-  </body>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-top">
+                <h1>📋 AttendCard</h1>
+                <div class="countdown-timer" id="countdownTimer" onclick="app.resetToday()" title="クリックして手動リセット">
+                    <div class="countdown-label">自動リセットまで</div>
+                    <div class="countdown-time" id="countdownTime">--:--:--</div>
+                </div>
+            </div>
+            <div class="date" id="currentDate"></div>
+        </div>
+        
+        <div class="summary">
+            <div class="summary-item attend">
+                <div class="summary-number" id="attendCount">0</div>
+                <div class="summary-label">参加</div>
+            </div>
+            <div class="summary-item absent">
+                <div class="summary-number" id="absentCount">0</div>
+                <div class="summary-label">欠席</div>
+            </div>
+            <div class="summary-item pending">
+                <div class="summary-number" id="pendingCount">0</div>
+                <div class="summary-label">未回答</div>
+            </div>
+            <div class="summary-item total">
+                <div class="summary-number" id="totalCount">0</div>
+                <div class="summary-label">合計</div>
+            </div>
+        </div>
+        
+        <div class="members">
+            <div id="membersList" class="loading">
+                読み込み中...
+            </div>
+            <div class="add-member-section">
+                <button class="btn-add-member" onclick="app.showAddMemberDialog()">
+                    ➕ メンバー追加
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
 </html>

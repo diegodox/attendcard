@@ -1,85 +1,56 @@
-# Attend Card Backend
+# AttendCard - 出席管理システム
 
-A Fastify + Socket.IO backend that manages attendance rooms with optimistic client updates, persistent snapshots, and operation logs powered by SQLite.
+毎日の参加・不参加をメンバーから募る出席管理システムです。
 
-## Features
+## 機能
 
-- Single-process Fastify server with integrated Socket.IO transport and static file hosting.
-- SQLite (WAL enabled) persistence with room snapshots and move operation logs.
-- Optimistic concurrency control with versioned card move operations and delta broadcasts.
-- Presence tracking with automatic stale entry pruning and ghost-hold cleanup after disconnects.
-- Daily room regeneration from templates at 00:00 JST plus manual reset endpoint.
-- Periodic snapshotting every five minutes and replay-on-start recovery.
-- Docker-friendly configuration with health check endpoint and static placeholder page.
+- 📊 **リアルタイム集計**: 参加・欠席・未回答の合計値をトップに表示
+- 👥 **メンバーカード**: 各メンバーの名前と参加/不参加ボタン
+- 🔄 **リアルタイム更新**: WebSocketによる即座の画面更新
+- 📱 **レスポンシブデザイン**: スマートフォン対応
+- 🐳 **Docker対応**: 簡単なデプロイメント
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+ (Fastify and Socket.IO depend on modern ESM support).
-- SQLite 3 (for local development the bundled `better-sqlite3` binary is sufficient).
-
-### Install dependencies
+## Docker Composeでの起動
 
 ```bash
+# リポジトリをクローン
+git clone <repository-url>
+cd attendcard
+
+# データディレクトリを作成
+mkdir -p data
+
+# Docker Composeで起動
+docker-compose up -d
+
+# ログを確認
+docker-compose logs -f
+```
+
+アプリケーションは http://localhost:3000 でアクセスできます。
+
+## 開発環境での起動
+
+```bash
+# 依存関係をインストール
 npm install
-```
 
-### Run the server
-
-Start a production-like instance:
-
-```bash
-npm run start
-```
-
-Or run with file watching during development:
-
-```bash
+# 開発サーバーを起動
 npm run dev
 ```
 
-### Environment variables
+## 環境
 
-| Name | Default | Description |
-| ---- | ------- | ----------- |
-| `PORT` | `3000` | HTTP/WS listening port. |
-| `HOST` | `0.0.0.0` | Hostname binding. |
-| `DATABASE_PATH` | `./data.sqlite` | SQLite file location. |
-| `TEMPLATE_DIR` | `./templates` | Directory containing room templates. |
-| `CORS_ORIGIN` | `*` | Allowed origins for Socket.IO connections (comma separated for multiple). |
-| `SNAPSHOT_ON_START` | `false` | When `true`, forces a snapshot write for all known rooms during boot. |
+- Node.js 20
+- Fastify (Webフレームワーク)
+- SQLite (データベース)
+- WebSocket (リアルタイム通信)
 
-## HTTP API
+## データベース
 
-- `GET /rooms/:id/state` – Returns `{ state, presence }` for initial client hydration.
-- `POST /rooms/:id/reset` – Regenerates the room from its template and broadcasts a `state:reset` event.
-- `GET /healthz` – Basic health probe.
+SQLiteを使用しており、以下のテーブルが自動作成されます：
 
-## WebSocket Events
+- `members`: メンバー情報
+- `attendance`: 出席記録
 
-Socket connections must provide a `roomId` query parameter.
-
-- Client → Server `op` – `{ type: "move", cardId, toZone, clientV }`.
-  - Ack success: `{ ok: true, version }`.
-  - Ack conflict/error: `{ ok: false, error, version?, state? }`.
-- Client → Server `presence:update` – `{ holding: cardId|null, ts? }`.
-- Server → Client `state:delta` – `{ roomId, delta, version, ts }`.
-- Server → Client `state:reset` – `{ state, ts, reason? }`.
-- Server → Client `presence:sync` – `[{ clientId, holding, ts }]`.
-
-## Persistence & Recovery
-
-- Snapshots are saved automatically every five minutes and on manual resets.
-- WAL mode keeps write performance high and allows concurrent reads.
-- On boot, the latest snapshot is replayed together with move operations to reconstruct room state.
-- Presence data lives in memory and is periodically pruned; stale entries disappear within ~30 seconds.
-
-## Scheduling
-
-- Daily reset cron at 00:00 JST (`Asia/Tokyo`) using room templates.
-- Presence pruning runs every 10 seconds.
-
-## Development Notes
-
-The repo ships with a simple static placeholder page served from `/public`. Integrate your PWA build output by replacing the contents of that directory.
+初回起動時にデフォルトメンバー（田中、佐藤、鈴木、高橋、渡辺）が自動追加されます。
