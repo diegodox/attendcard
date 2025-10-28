@@ -14,12 +14,32 @@ A Fastify + Socket.IO backend that manages attendance rooms with optimistic clie
 
 ## Getting Started
 
+### Prerequisites
+
+- Node.js 18+ (Fastify and Socket.IO depend on modern ESM support).
+- SQLite 3 (for local development the bundled `better-sqlite3` binary is sufficient).
+
+### Install dependencies
+
 ```bash
 npm install
+```
+
+### Run the server
+
+Start a production-like instance:
+
+```bash
 npm run start
 ```
 
-Environment variables:
+Or run with file watching during development:
+
+```bash
+npm run dev
+```
+
+### Environment variables
 
 | Name | Default | Description |
 | ---- | ------- | ----------- |
