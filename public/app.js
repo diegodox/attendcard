@@ -502,69 +502,47 @@ class AttendanceApp {
         let currentX = 0;
         let isDragging = false;
 
-        // Simplified approach: Only handle swipe on specific swipe areas
-        const createSwipeArea = () => {
-            const swipeArea = document.createElement('div');
-            swipeArea.className = 'mobile-swipe-area';
-            swipeArea.style.cssText = `
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                height: 150px;
-                z-index: 5;
-                pointer-events: auto;
-                background: transparent;
-            `;
-            mobileContainer.appendChild(swipeArea);
-            return swipeArea;
-        };
-
-        const swipeArea = createSwipeArea();
-
-        // Touch events only on the swipe area
-        swipeArea.addEventListener('touchstart', (e) => {
-            startX = e.touches[0].clientX;
-            startY = e.touches[0].clientY;
-            isDragging = true;
-            wrapper.style.transition = 'none';
+        // Simple swipe detection - no overlay elements
+        let swipeStartX = 0;
+        let swipeStartY = 0;
+        let swipeStartTime = 0;
+        
+        mobileContainer.addEventListener('touchstart', (e) => {
+            // Only start swipe detection in non-scrollable areas
+            if (e.target.closest('.members-container')) {
+                return;
+            }
+            
+            swipeStartX = e.touches[0].clientX;
+            swipeStartY = e.touches[0].clientY;
+            swipeStartTime = Date.now();
         }, { passive: true });
 
-        swipeArea.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
-            
-            const touch = e.touches[0];
-            const diffX = Math.abs(touch.clientX - startX);
-            const diffY = Math.abs(touch.clientY - startY);
-            
-            // If horizontal movement is dominant, handle swipe
-            if (diffX > diffY && diffX > 10) {
-                e.preventDefault();
-                currentX = touch.clientX;
-                const diff = currentX - startX;
-                const currentTransform = -(this.currentMobileIndex * 20);
-                wrapper.style.transform = `translateX(${currentTransform + (diff / window.innerWidth) * 20}%)`;
+        mobileContainer.addEventListener('touchend', (e) => {
+            if (e.target.closest('.members-container')) {
+                return;
             }
-        }, { passive: false });
-
-        swipeArea.addEventListener('touchend', (e) => {
-            if (!isDragging) return;
-            isDragging = false;
-            wrapper.style.transition = 'transform 0.3s ease';
             
-            const diff = currentX - startX;
-            const threshold = window.innerWidth * 0.2;
-
-            if (Math.abs(diff) > threshold) {
-                if (diff > 0 && this.currentMobileIndex > 0) {
+            const deltaTime = Date.now() - swipeStartTime;
+            if (deltaTime > 500) return; // Too slow
+            
+            const touch = e.changedTouches[0];
+            const deltaX = touch.clientX - swipeStartX;
+            const deltaY = touch.clientY - swipeStartY;
+            
+            // Check if it's a horizontal swipe
+            if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+                if (deltaX > 0 && this.currentMobileIndex > 0) {
+                    // Swipe right
                     this.currentMobileIndex--;
-                } else if (diff < 0 && this.currentMobileIndex < 4) {
+                    this.updateMobilePosition();
+                } else if (deltaX < 0 && this.currentMobileIndex < 4) {
+                    // Swipe left
                     this.currentMobileIndex++;
+                    this.updateMobilePosition();
                 }
             }
-
-            this.updateMobilePosition();
-        });
+        }, { passive: true });
 
         // Mouse events for desktop testing
         mobileContainer.addEventListener('mousedown', (e) => {

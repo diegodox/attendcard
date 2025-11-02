@@ -77,6 +77,36 @@ fastify.register(require('@fastify/static'), {
   prefix: '/',
 });
 
+// Lightweight mobile page
+fastify.get('/mobile', async (request, reply) => {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AttendCard Mobile</title>
+    <style>
+        body { font-family: Arial; margin: 0; padding: 20px; background: #667eea; color: white; }
+        .card { background: white; color: black; padding: 20px; margin: 10px 0; border-radius: 10px; }
+        .btn { background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 5px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>AttendCard Mobile</h1>
+    <div class="card">
+        <h2>今日の出席</h2>
+        <button class="btn" onclick="window.location.href='/'">フル版へ</button>
+    </div>
+    <script>
+        console.log('Mobile page loaded');
+    </script>
+</body>
+</html>`;
+  
+  reply.type('text/html').send(html);
+});
+
 // Database setup
 const dbPath = path.join(__dirname, '../data/attendance.db');
 const db = new sqlite3.Database(dbPath);
