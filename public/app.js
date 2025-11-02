@@ -400,19 +400,7 @@ class AttendanceApp {
         this.handleMobileCardClick = this.handleMobileCardClick.bind(this);
         mobileContainer.addEventListener('click', this.handleMobileCardClick);
 
-        // Re-apply scroll event handlers for members containers
-        setTimeout(() => {
-            const membersContainers = document.querySelectorAll('.mobile-card .members-container');
-            membersContainers.forEach(container => {
-                container.addEventListener('touchstart', (e) => {
-                    e.stopPropagation();
-                }, { passive: true });
-                
-                container.addEventListener('touchmove', (e) => {
-                    e.stopPropagation();
-                }, { passive: true });
-            });
-        }, 50);
+        // Members containers handle their own scrolling naturally
     }
 
     generateCardHTML(dayName, today, dayNames) {
@@ -514,60 +502,67 @@ class AttendanceApp {
         let currentX = 0;
         let isDragging = false;
 
-        // Touch events for mobile
-        mobileContainer.addEventListener('touchstart', (e) => {
-            // Don't initiate swipe if touching a button or inside members container
-            if (e.target.closest('button') || e.target.closest('.members-container')) {
-                return;
-            }
+        // Simplified approach: Only handle swipe on specific swipe areas
+        const createSwipeArea = () => {
+            const swipeArea = document.createElement('div');
+            swipeArea.className = 'mobile-swipe-area';
+            swipeArea.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 150px;
+                z-index: 5;
+                pointer-events: auto;
+                background: transparent;
+            `;
+            mobileContainer.appendChild(swipeArea);
+            return swipeArea;
+        };
+
+        const swipeArea = createSwipeArea();
+
+        // Touch events only on the swipe area
+        swipeArea.addEventListener('touchstart', (e) => {
             startX = e.touches[0].clientX;
             startY = e.touches[0].clientY;
             isDragging = true;
             wrapper.style.transition = 'none';
         }, { passive: true });
 
-        mobileContainer.addEventListener('touchmove', (e) => {
+        swipeArea.addEventListener('touchmove', (e) => {
             if (!isDragging) return;
             
-            // Only prevent default for horizontal swipe gestures
             const touch = e.touches[0];
             const diffX = Math.abs(touch.clientX - startX);
             const diffY = Math.abs(touch.clientY - startY);
             
             // If horizontal movement is dominant, handle swipe
-            if (diffX > diffY) {
+            if (diffX > diffY && diffX > 10) {
                 e.preventDefault();
                 currentX = touch.clientX;
                 const diff = currentX - startX;
                 const currentTransform = -(this.currentMobileIndex * 20);
                 wrapper.style.transform = `translateX(${currentTransform + (diff / window.innerWidth) * 20}%)`;
-            } else {
-                // Allow vertical scrolling
-                isDragging = false;
-                wrapper.style.transition = 'transform 0.3s ease';
-                wrapper.style.transform = `translateX(-${this.currentMobileIndex * 20}%)`;
             }
         }, { passive: false });
 
-        mobileContainer.addEventListener('touchend', (e) => {
+        swipeArea.addEventListener('touchend', (e) => {
             if (!isDragging) return;
             isDragging = false;
             wrapper.style.transition = 'transform 0.3s ease';
             
             const diff = currentX - startX;
-            const threshold = window.innerWidth * 0.2; // 20% of screen width
+            const threshold = window.innerWidth * 0.2;
 
             if (Math.abs(diff) > threshold) {
                 if (diff > 0 && this.currentMobileIndex > 0) {
-                    // Swipe right - go to previous day
                     this.currentMobileIndex--;
                 } else if (diff < 0 && this.currentMobileIndex < 4) {
-                    // Swipe left - go to next day
                     this.currentMobileIndex++;
                 }
             }
 
-            // Update position and indicators
             this.updateMobilePosition();
         });
 
@@ -610,17 +605,7 @@ class AttendanceApp {
             this.updateMobilePosition();
         });
 
-        // Ensure smooth scrolling in members containers
-        const membersContainers = document.querySelectorAll('.mobile-card .members-container');
-        membersContainers.forEach(container => {
-            container.addEventListener('touchstart', (e) => {
-                e.stopPropagation(); // Prevent parent swipe handling
-            }, { passive: true });
-            
-            container.addEventListener('touchmove', (e) => {
-                e.stopPropagation(); // Prevent parent swipe handling
-            }, { passive: true });
-        });
+        // Members containers will scroll naturally without interference
     }
 
     updateMobilePosition() {
