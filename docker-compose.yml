@@ -2,12 +2,20 @@ version: '3.8'
 
 services:
   app:
-    image: ghcr.io/diegodox/attendcard:main-4988525
+    image: ghcr.io/diegodox/attendcard:latest
     environment:
       - NODE_ENV=production
     volumes:
       - attendcard_data:/app/data
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
 
   cloudflare-tunnel:
     image: cloudflare/cloudflared:latest
@@ -17,6 +25,14 @@ services:
     restart: unless-stopped
     depends_on:
       - app
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.25'
+        reservations:
+          memory: 32M
+          cpus: '0.1'
 
 volumes:
   attendcard_data:
