@@ -508,7 +508,14 @@ class AttendanceApp {
         let swipeStartTime = 0;
         
         mobileContainer.addEventListener('touchstart', (e) => {
-            // Only start swipe detection in header/summary areas
+            // Completely disable swipe detection in members area
+            if (e.target.closest('.members-container') || 
+                e.target.closest('.members-grid') || 
+                e.target.closest('.member-card')) {
+                return;
+            }
+            
+            // Only allow in very specific header/summary areas
             if (!e.target.closest('.header') && !e.target.closest('.summary')) {
                 return;
             }
@@ -519,23 +526,30 @@ class AttendanceApp {
         }, { passive: true });
 
         mobileContainer.addEventListener('touchend', (e) => {
+            // Completely block swipe in members area
+            if (e.target.closest('.members-container') || 
+                e.target.closest('.members-grid') || 
+                e.target.closest('.member-card')) {
+                return;
+            }
+            
             // Only process swipe in header/summary areas
             if (!e.target.closest('.header') && !e.target.closest('.summary')) {
                 return;
             }
             
             const deltaTime = Date.now() - swipeStartTime;
-            if (deltaTime > 300) return; // Faster time requirement
+            if (deltaTime > 200) return; // Even faster time requirement
             
             const touch = e.changedTouches[0];
             const deltaX = touch.clientX - swipeStartX;
             const deltaY = touch.clientY - swipeStartY;
             
-            // Much stricter horizontal swipe requirements
-            // Horizontal movement must be at least 3x larger than vertical
-            const isHorizontalSwipe = Math.abs(deltaX) > Math.abs(deltaY) * 3 && 
-                                     Math.abs(deltaX) > 80 && 
-                                     Math.abs(deltaY) < 30;
+            // Extremely strict horizontal swipe requirements
+            // Horizontal movement must be at least 4x larger than vertical
+            const isHorizontalSwipe = Math.abs(deltaX) > Math.abs(deltaY) * 4 && 
+                                     Math.abs(deltaX) > 100 && 
+                                     Math.abs(deltaY) < 20;
             
             if (isHorizontalSwipe) {
                 if (deltaX > 0 && this.currentMobileIndex > 0) {
