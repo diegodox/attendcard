@@ -2,11 +2,22 @@ version: '3.8'
 
 services:
   app:
-    build: .
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./data:/app/data
+    image: ghcr.io/diegodox/attendcard:main-4988525
     environment:
       - NODE_ENV=production
+    volumes:
+      - attendcard_data:/app/data
     restart: unless-stopped
+
+  cloudflare-tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    restart: unless-stopped
+    depends_on:
+      - app
+
+volumes:
+  attendcard_data:
+    driver: local
