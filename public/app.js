@@ -399,6 +399,20 @@ class AttendanceApp {
         // Add event listeners to mobile cards
         this.handleMobileCardClick = this.handleMobileCardClick.bind(this);
         mobileContainer.addEventListener('click', this.handleMobileCardClick);
+
+        // Re-apply scroll event handlers for members containers
+        setTimeout(() => {
+            const membersContainers = document.querySelectorAll('.mobile-card .members-container');
+            membersContainers.forEach(container => {
+                container.addEventListener('touchstart', (e) => {
+                    e.stopPropagation();
+                }, { passive: true });
+                
+                container.addEventListener('touchmove', (e) => {
+                    e.stopPropagation();
+                }, { passive: true });
+            });
+        }, 50);
     }
 
     generateCardHTML(dayName, today, dayNames) {
@@ -496,28 +510,44 @@ class AttendanceApp {
         const wrapper = document.getElementById('mobileCardsWrapper');
         
         let startX = 0;
+        let startY = 0;
         let currentX = 0;
         let isDragging = false;
 
         // Touch events for mobile
         mobileContainer.addEventListener('touchstart', (e) => {
-            // Don't initiate swipe if touching a button
-            if (e.target.closest('button')) {
+            // Don't initiate swipe if touching a button or inside members container
+            if (e.target.closest('button') || e.target.closest('.members-container')) {
                 return;
             }
             startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
             isDragging = true;
             wrapper.style.transition = 'none';
-        });
+        }, { passive: true });
 
         mobileContainer.addEventListener('touchmove', (e) => {
             if (!isDragging) return;
-            e.preventDefault();
-            currentX = e.touches[0].clientX;
-            const diff = currentX - startX;
-            const currentTransform = -(this.currentMobileIndex * 20);
-            wrapper.style.transform = `translateX(${currentTransform + (diff / window.innerWidth) * 20}%)`;
-        });
+            
+            // Only prevent default for horizontal swipe gestures
+            const touch = e.touches[0];
+            const diffX = Math.abs(touch.clientX - startX);
+            const diffY = Math.abs(touch.clientY - startY);
+            
+            // If horizontal movement is dominant, handle swipe
+            if (diffX > diffY) {
+                e.preventDefault();
+                currentX = touch.clientX;
+                const diff = currentX - startX;
+                const currentTransform = -(this.currentMobileIndex * 20);
+                wrapper.style.transform = `translateX(${currentTransform + (diff / window.innerWidth) * 20}%)`;
+            } else {
+                // Allow vertical scrolling
+                isDragging = false;
+                wrapper.style.transition = 'transform 0.3s ease';
+                wrapper.style.transform = `translateX(-${this.currentMobileIndex * 20}%)`;
+            }
+        }, { passive: false });
 
         mobileContainer.addEventListener('touchend', (e) => {
             if (!isDragging) return;
@@ -578,6 +608,18 @@ class AttendanceApp {
             }
 
             this.updateMobilePosition();
+        });
+
+        // Ensure smooth scrolling in members containers
+        const membersContainers = document.querySelectorAll('.mobile-card .members-container');
+        membersContainers.forEach(container => {
+            container.addEventListener('touchstart', (e) => {
+                e.stopPropagation(); // Prevent parent swipe handling
+            }, { passive: true });
+            
+            container.addEventListener('touchmove', (e) => {
+                e.stopPropagation(); // Prevent parent swipe handling
+            }, { passive: true });
         });
     }
 
