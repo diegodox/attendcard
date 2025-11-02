@@ -196,6 +196,18 @@ class AttendanceApp {
     }
 
     renderWeekDays() {
+        // Use requestIdleCallback for heavy DOM operations
+        if (window.requestIdleCallback) {
+            window.requestIdleCallback(() => {
+                this.performRender();
+            }, { timeout: 100 });
+        } else {
+            // Fallback for browsers that don't support requestIdleCallback
+            setTimeout(() => this.performRender(), 0);
+        }
+    }
+
+    performRender() {
         // Save scroll positions before re-rendering
         this.saveScrollPositions();
         
@@ -203,66 +215,52 @@ class AttendanceApp {
         this.renderMobile();
         
         // Restore scroll positions after re-rendering
-        setTimeout(() => this.restoreScrollPositions(), 50);
+        requestAnimationFrame(() => this.restoreScrollPositions());
     }
 
     saveScrollPositions() {
         this.scrollPositions = {};
         
-        // Desktop scroll positions - use day names as keys for more accurate restoration
-        const desktopCards = document.querySelectorAll('#attendCards .attend-card');
-        desktopCards.forEach((card, index) => {
-            const container = card.querySelector('.members-container');
-            if (container) {
-                // Try to get day name from header
-                const header = card.querySelector('.header h1');
-                const dayKey = header ? `desktop-${header.textContent.trim()}` : `desktop-${index}`;
-                this.scrollPositions[dayKey] = container.scrollTop;
+        // Use more efficient querying and reduce DOM access
+        const saveCardPositions = (selector, prefix) => {
+            const cards = document.querySelectorAll(selector);
+            for (let i = 0; i < cards.length; i++) {
+                const card = cards[i];
+                const container = card.querySelector('.members-container');
+                if (container) {
+                    const header = card.querySelector('.header h1');
+                    const dayKey = header ? `${prefix}-${header.textContent.trim()}` : `${prefix}-${i}`;
+                    this.scrollPositions[dayKey] = container.scrollTop;
+                }
             }
-        });
+        };
         
-        // Mobile scroll positions
-        const mobileCards = document.querySelectorAll('.mobile-card .attend-card');
-        mobileCards.forEach((card, index) => {
-            const container = card.querySelector('.members-container');
-            if (container) {
-                const header = card.querySelector('.header h1');
-                const dayKey = header ? `mobile-${header.textContent.trim()}` : `mobile-${index}`;
-                this.scrollPositions[dayKey] = container.scrollTop;
-            }
-        });
+        saveCardPositions('#attendCards .attend-card', 'desktop');
+        saveCardPositions('.mobile-card .attend-card', 'mobile');
     }
 
     restoreScrollPositions() {
         if (!this.scrollPositions) return;
         
-        // Restore desktop scroll positions
-        const desktopCards = document.querySelectorAll('#attendCards .attend-card');
-        desktopCards.forEach((card, index) => {
-            const container = card.querySelector('.members-container');
-            if (container) {
-                const header = card.querySelector('.header h1');
-                const dayKey = header ? `desktop-${header.textContent.trim()}` : `desktop-${index}`;
-                const savedPosition = this.scrollPositions[dayKey];
-                if (savedPosition !== undefined) {
-                    container.scrollTop = savedPosition;
+        // Use more efficient restoration method
+        const restoreCardPositions = (selector, prefix) => {
+            const cards = document.querySelectorAll(selector);
+            for (let i = 0; i < cards.length; i++) {
+                const card = cards[i];
+                const container = card.querySelector('.members-container');
+                if (container) {
+                    const header = card.querySelector('.header h1');
+                    const dayKey = header ? `${prefix}-${header.textContent.trim()}` : `${prefix}-${i}`;
+                    const savedPosition = this.scrollPositions[dayKey];
+                    if (savedPosition !== undefined) {
+                        container.scrollTop = savedPosition;
+                    }
                 }
             }
-        });
+        };
         
-        // Restore mobile scroll positions
-        const mobileCards = document.querySelectorAll('.mobile-card .attend-card');
-        mobileCards.forEach((card, index) => {
-            const container = card.querySelector('.members-container');
-            if (container) {
-                const header = card.querySelector('.header h1');
-                const dayKey = header ? `mobile-${header.textContent.trim()}` : `mobile-${index}`;
-                const savedPosition = this.scrollPositions[dayKey];
-                if (savedPosition !== undefined) {
-                    container.scrollTop = savedPosition;
-                }
-            }
-        });
+        restoreCardPositions('#attendCards .attend-card', 'desktop');
+        restoreCardPositions('.mobile-card .attend-card', 'mobile');
     }
 
     renderDesktop() {
@@ -405,15 +403,19 @@ class AttendanceApp {
 
     generateCardHTML(dayName, today, dayNames) {
         const dayData = this.data.weekData[dayName];
-        const dayIndex = dayNames.indexOf(dayName) + 1; // 月=1, 火=2, 水=3, 木=4, 金=5
+        const dayIndex = dayNames.indexOf(dayName) + 1;
         const isToday = today === dayIndex;
         
-        const attendCount = dayData.members.filter(m => m.status === 'attend').length;
-        const absentCount = dayData.members.filter(m => m.status === 'absent').length;
-        const pendingCount = dayData.members.filter(m => m.status === null).length;
+        // Pre-calculate counts for efficiency
+        let attendCount = 0, absentCount = 0, pendingCount = 0;
+        dayData.members.forEach(m => {
+            if (m.status === 'attend') attendCount++;
+            else if (m.status === 'absent') absentCount++;
+            else pendingCount++;
+        });
         const totalCount = dayData.members.length;
         
-        // Format date from dayData.date (YYYY-MM-DD) to readable format
+        // Format date
         const dateObj = new Date(dayData.date);
         const formattedDate = dateObj.toLocaleDateString('ja-JP', {
             month: 'numeric',
@@ -421,98 +423,72 @@ class AttendanceApp {
             weekday: 'short'
         });
 
-        return `
-            <div class="attend-card ${isToday ? 'today' : ''}">
-                <div class="header">
-                    <div class="header-top">
-                        <h1>📋 ${formattedDate}</h1>
-                    </div>
+        // Pre-build member HTML fragments
+        const memberFragments = dayData.members.map(member => {
+            const cardClass = member.status ? 
+                (member.status === 'attend' ? 'attending' : 'absent') : '';
+            
+            const statusClass = member.status ? 
+                (member.status === 'attend' ? 'status-attend' : 'status-absent') : 
+                'status-pending';
+
+            return `<div class="member-card ${cardClass}">
+                <div class="member-info">
+                    <span class="status-indicator ${statusClass}"></span>
+                    <span class="member-name">${member.name}</span>
                 </div>
-                
-                <div class="summary">
-                    <div class="summary-item attend">
-                        <div class="summary-number">${attendCount}</div>
-                        <div class="summary-label">参加</div>
-                    </div>
-                    <div class="summary-item absent">
-                        <div class="summary-number">${absentCount}</div>
-                        <div class="summary-label">欠席</div>
-                    </div>
-                    <div class="summary-item pending">
-                        <div class="summary-number">${pendingCount}</div>
-                        <div class="summary-label">未回答</div>
-                    </div>
-                    <div class="summary-item total">
-                        <div class="summary-number">${totalCount}</div>
-                        <div class="summary-label">合計</div>
-                    </div>
+                <div class="member-buttons">
+                    <button class="btn-pin ${this.getSinglePinClass(member)}" data-day="${dayName}" data-member-id="${member.id}" data-action="pin-current" title="${this.getSinglePinTooltip(member)}">
+                        ${this.getSinglePinIcon(member)}
+                    </button>
+                    <button class="btn btn-attend ${member.originalStatus === 'attend' ? 'active' : ''}" data-day="${dayName}" data-member-id="${member.id}" data-action="attend">
+                        ✓ 参加
+                    </button>
+                    <button class="btn btn-absent ${member.originalStatus === 'absent' ? 'active' : ''}" data-day="${dayName}" data-member-id="${member.id}" data-action="absent">
+                        ✗ 欠席
+                    </button>
+                    <button class="btn-delete" data-member-id="${member.id}" data-member-name="${member.name}" data-action="delete" title="メンバーを削除">
+                        🗑️
+                    </button>
                 </div>
-                
-                <div class="members-container">
-                    <div class="members-grid">
-                        ${dayData.members.map(member => {
-                            const cardClass = member.status ? 
-                                (member.status === 'attend' ? 'attending' : 'absent') : '';
-                            
-                            return `
-                                <div class="member-card ${cardClass}">
-                                    <div class="member-info">
-                                        <span class="status-indicator ${
-                                            member.status ? 
-                                            (member.status === 'attend' ? 'status-attend' : 'status-absent') : 
-                                            'status-pending'
-                                        }"></span>
-                                        <span class="member-name">${member.name}</span>
-                                    </div>
-                                    <div class="member-buttons">
-                                        <button 
-                                            class="btn-pin ${this.getSinglePinClass(member)}"
-                                            data-day="${dayName}"
-                                            data-member-id="${member.id}"
-                                            data-action="pin-current"
-                                            title="${this.getSinglePinTooltip(member)}"
-                                        >
-                                            ${this.getSinglePinIcon(member)}
-                                        </button>
-                                        <button 
-                                            class="btn btn-attend ${member.originalStatus === 'attend' ? 'active' : ''}"
-                                            data-day="${dayName}"
-                                            data-member-id="${member.id}"
-                                            data-action="attend"
-                                        >
-                                            ✓ 参加
-                                        </button>
-                                        <button 
-                                            class="btn btn-absent ${member.originalStatus === 'absent' ? 'active' : ''}"
-                                            data-day="${dayName}"
-                                            data-member-id="${member.id}"
-                                            data-action="absent"
-                                        >
-                                            ✗ 欠席
-                                        </button>
-                                        <button 
-                                            class="btn-delete"
-                                            data-member-id="${member.id}"
-                                            data-member-name="${member.name}"
-                                            data-action="delete"
-                                            title="メンバーを削除"
-                                        >
-                                            🗑️
-                                        </button>
-                                    </div>
-                                </div>
-                            `;
-                        }).join('')}
-                        
-                        <div class="add-member-card">
-                            <button class="btn-add-member-card" data-action="add-member">
-                                ➕ メンバー追加
-                            </button>
-                        </div>
+            </div>`;
+        });
+
+        return `<div class="attend-card ${isToday ? 'today' : ''}">
+            <div class="header">
+                <div class="header-top">
+                    <h1>📋 ${formattedDate}</h1>
+                </div>
+            </div>
+            <div class="summary">
+                <div class="summary-item attend">
+                    <div class="summary-number">${attendCount}</div>
+                    <div class="summary-label">参加</div>
+                </div>
+                <div class="summary-item absent">
+                    <div class="summary-number">${absentCount}</div>
+                    <div class="summary-label">欠席</div>
+                </div>
+                <div class="summary-item pending">
+                    <div class="summary-number">${pendingCount}</div>
+                    <div class="summary-label">未回答</div>
+                </div>
+                <div class="summary-item total">
+                    <div class="summary-number">${totalCount}</div>
+                    <div class="summary-label">合計</div>
+                </div>
+            </div>
+            <div class="members-container">
+                <div class="members-grid">
+                    ${memberFragments.join('')}
+                    <div class="add-member-card">
+                        <button class="btn-add-member-card" data-action="add-member">
+                            ➕ メンバー追加
+                        </button>
                     </div>
                 </div>
             </div>
-        `;
+        </div>`;
     }
     
     setupMobileSwipe() {
@@ -626,25 +602,43 @@ class AttendanceApp {
         if (!button) return;
         
         const action = button.dataset.action;
-        
         if (!action) return;
         
         event.preventDefault();
         
-        if (action === 'attend' || action === 'absent') {
-            const dayName = button.dataset.day;
-            const memberId = parseInt(button.dataset.memberId);
-            this.updateDayAttendance(dayName, memberId, action);
-        } else if (action === 'delete') {
-            const memberId = parseInt(button.dataset.memberId);
-            const memberName = button.dataset.memberName;
-            this.deleteMember(memberId, memberName);
-        } else if (action === 'pin-current') {
-            const dayName = button.dataset.day;
-            const memberId = parseInt(button.dataset.memberId);
-            this.pinCurrentSelection(dayName, memberId);
-        } else if (action === 'add-member') {
-            this.showAddMemberDialog();
+        // Use requestIdleCallback to defer heavy operations
+        const processAction = () => {
+            switch (action) {
+                case 'attend':
+                case 'absent':
+                    this.updateDayAttendance(
+                        button.dataset.day,
+                        parseInt(button.dataset.memberId),
+                        action
+                    );
+                    break;
+                case 'delete':
+                    this.deleteMember(
+                        parseInt(button.dataset.memberId),
+                        button.dataset.memberName
+                    );
+                    break;
+                case 'pin-current':
+                    this.pinCurrentSelection(
+                        button.dataset.day,
+                        parseInt(button.dataset.memberId)
+                    );
+                    break;
+                case 'add-member':
+                    this.showAddMemberDialog();
+                    break;
+            }
+        };
+
+        if (window.requestIdleCallback) {
+            window.requestIdleCallback(processAction, { timeout: 50 });
+        } else {
+            setTimeout(processAction, 0);
         }
     }
 

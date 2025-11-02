@@ -31,6 +31,8 @@
             justify-content: flex-start;
             align-items: flex-start;
             scroll-behavior: smooth;
+            contain: layout style paint;
+            will-change: scroll-position;
         }
 
         .cards-stack::before {
@@ -125,6 +127,7 @@
         .attend-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+            will-change: transform;
         }
 
         .attend-card.today {
@@ -228,11 +231,13 @@
             justify-content: space-between;
             align-items: center;
             transition: all 0.3s ease;
+            contain: layout style paint;
         }
 
         .member-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            will-change: transform;
         }
 
         .member-card.attending {
@@ -478,6 +483,8 @@
             flex: 1;
             overflow-y: auto;
             min-height: 0;
+            contain: layout style paint;
+            will-change: scroll-position;
         }
 
         .members-container::-webkit-scrollbar {
