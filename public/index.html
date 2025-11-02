@@ -15,16 +15,121 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            padding: 20px;
+            padding: 10px;
         }
 
         .container {
-            max-width: 800px;
-            margin: 0 auto;
+            width: 100%;
+            padding: 10px;
+        }
+
+        .cards-stack {
+            display: flex;
+            gap: 20px;
+            overflow-x: auto;
+            padding: 10px;
+            justify-content: flex-start;
+            align-items: flex-start;
+            scroll-behavior: smooth;
+        }
+
+        .cards-stack::before {
+            content: '';
+            flex: 0 0 calc(50vw - 400px - 20px);
+            min-width: 0;
+        }
+
+        .cards-stack::after {
+            content: '';
+            flex: 0 0 calc(50vw - 400px - 20px);
+            min-width: 0;
+        }
+
+        /* Custom scrollbar for webkit browsers */
+        .cards-stack::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .cards-stack::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        .cards-stack::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        .cards-stack::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .mobile-card-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .mobile-cards-wrapper {
+            display: flex;
+            width: 500%;
+            height: 100%;
+            transition: transform 0.3s ease;
+        }
+
+        .mobile-card {
+            width: 20%;
+            height: 100%;
+            flex-shrink: 0;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        .swipe-indicator {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            z-index: 100;
+        }
+
+        .swipe-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .swipe-dot.active {
+            background: rgba(255, 255, 255, 1);
+            transform: scale(1.2);
+        }
+
+        .attend-card {
+            flex: 0 0 800px;
             background: white;
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
             overflow: hidden;
+            transition: all 0.3s ease;
+            height: calc(100vh - 40px);
+            min-height: 600px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .attend-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+
+        .attend-card.today {
+            border: 3px solid #667eea;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
         }
 
         .header {
@@ -32,6 +137,7 @@
             color: white;
             padding: 30px;
             text-align: center;
+            flex-shrink: 0;
         }
 
         .header-top {
@@ -85,6 +191,7 @@
             display: flex;
             justify-content: space-around;
             border-bottom: 1px solid #dee2e6;
+            flex-shrink: 0;
         }
 
         .summary-item {
@@ -104,7 +211,7 @@
 
         .attend .summary-number { color: #28a745; }
         .absent .summary-number { color: #dc3545; }
-        .pending .summary-number { color: #ffc107; }
+        .pending .summary-number { color: #6c757d; }
         .total .summary-number { color: #6f42c1; }
 
         .members {
@@ -139,7 +246,7 @@
         }
 
         .member-name {
-            font-size: 1.3em;
+            font-size: 1.1em;
             font-weight: 600;
             color: #333;
         }
@@ -150,14 +257,15 @@
         }
 
         .btn {
-            padding: 10px 20px;
+            padding: 10px 15px;
             border: none;
             border-radius: 25px;
-            font-size: 1em;
+            font-size: 0.9em;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
-            min-width: 80px;
+            min-width: 90px;
+            white-space: nowrap;
         }
 
         .btn:hover {
@@ -221,9 +329,17 @@
             padding: 20px;
         }
 
-        .btn-add-member {
-            background: #667eea;
-            color: white;
+        .add-member-card {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 80px;
+            grid-column: 1 / -1;
+        }
+
+        .btn-add-member-card {
+            background: transparent;
+            color: #667eea;
             border: 2px dashed #667eea;
             border-radius: 10px;
             padding: 15px 30px;
@@ -231,14 +347,14 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
-            background: transparent;
-            color: #667eea;
+            width: 100%;
+            max-width: 300px;
         }
 
-        .btn-add-member:hover {
+        .btn-add-member-card:hover {
             background: #667eea;
             color: white;
-            transform: scale(1.05);
+            transform: scale(1.02);
         }
 
         .btn-delete {
@@ -257,106 +373,393 @@
             color: white;
         }
 
+        .btn-pin {
+            background: transparent;
+            color: #6c757d;
+            border: 1px solid #dee2e6;
+            padding: 6px 8px;
+            font-size: 0.8em;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            min-width: 32px;
+        }
+
+        .btn-pin:hover {
+            transform: scale(1.1);
+        }
+
+        .btn-pin svg {
+            width: 16px;
+            height: 16px;
+            display: block;
+        }
+
+        .btn-pin.pin-matched-attend {
+            background: rgba(40, 167, 69, 0.2);
+            color: #28a745;
+            border: none;
+            opacity: 0.9;
+            cursor: default;
+            pointer-events: none;
+        }
+
+        .btn-pin.pin-matched-attend:hover {
+            transform: none;
+        }
+
+        .btn-pin.pin-matched-absent {
+            background: rgba(220, 53, 69, 0.2);
+            color: #dc3545;
+            border: none;
+            opacity: 0.9;
+            cursor: default;
+            pointer-events: none;
+        }
+
+        .btn-pin.pin-matched-absent:hover {
+            transform: none;
+        }
+
+        .btn-pin.pin-matched-pending {
+            background: rgba(108, 117, 125, 0.2);
+            color: #6c757d;
+            border: none;
+            opacity: 0.9;
+            cursor: default;
+            pointer-events: none;
+        }
+
+        .btn-pin.pin-matched-pending:hover {
+            transform: none;
+        }
+
+        .btn-pin.pin-default-attend {
+            background: rgba(40, 167, 69, 0.1);
+            color: #28a745;
+            border-color: #28a745;
+        }
+
+        .btn-pin.pin-default-attend:hover {
+            background: rgba(40, 167, 69, 0.2);
+        }
+
+        .btn-pin.pin-default-absent {
+            background: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+            border-color: #dc3545;
+        }
+
+        .btn-pin.pin-default-absent:hover {
+            background: rgba(220, 53, 69, 0.2);
+        }
+
+        .btn-pin.pin-default-pending {
+            background: rgba(108, 117, 125, 0.1);
+            color: #6c757d;
+            border-color: #6c757d;
+        }
+
+        .btn-pin.pin-default-pending:hover {
+            background: rgba(108, 117, 125, 0.2);
+        }
+
+
         .member-buttons {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             align-items: center;
+            flex-shrink: 0;
+        }
+
+
+        .members-container {
+            padding: 30px;
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+        }
+
+        .members-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .members-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .members-container::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+
+        .members-container::-webkit-scrollbar-thumb:hover {
+            background: #a1a1a1;
+        }
+
+        .members-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .member-card {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+            min-width: 0;
+        }
+
+        .member-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .day-card.today {
+            border: 3px solid #667eea;
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .day-card.today .day-header {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+
+        .day-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            text-align: center;
+        }
+
+        .day-name {
+            font-size: 1.1em;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .day-date {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .day-summary {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-around;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .day-summary-item {
+            text-align: center;
+        }
+
+        .day-summary-number {
+            font-size: 1.4em;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .day-summary-label {
+            font-size: 0.8em;
+            color: #6c757d;
+        }
+
+        .day-members {
+            padding: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .day-member-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f3f4;
+        }
+
+        .day-member-item:last-child {
+            border-bottom: none;
+        }
+
+        .day-member-name {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .day-member-status {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .day-member-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .day-btn {
+            padding: 4px 8px;
+            border: none;
+            border-radius: 15px;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 50px;
         }
 
         @media (max-width: 600px) {
+            body {
+                padding: 0;
+                margin: 0;
+                overflow: hidden;
+            }
+
             .container {
-                margin: 10px;
-                border-radius: 10px;
+                display: none;
+            }
+
+            .mobile-card-container {
+                display: block;
+            }
+
+            .attend-card {
+                width: 100%;
+                height: 100%;
+                flex: none;
+                border-radius: 0;
+                margin: 0;
+                display: flex;
+                flex-direction: column;
             }
             
             .header {
-                padding: 20px;
+                padding: 15px;
+                flex-shrink: 0;
             }
             
             .header h1 {
-                font-size: 2em;
+                font-size: 1.8em;
+                margin: 0;
             }
             
             .summary {
-                padding: 20px;
-                flex-wrap: wrap;
-                gap: 20px;
-            }
-            
-            .member-card {
-                flex-direction: column;
-                gap: 15px;
-                text-align: center;
-            }
-            
-            .member-buttons {
-                justify-content: center;
+                padding: 15px;
+                flex-shrink: 0;
+                display: flex;
+                justify-content: space-around;
             }
 
-            .header-top {
+            .summary-item {
+                text-align: center;
+            }
+
+            .summary-number {
+                font-size: 1.5em;
+            }
+
+            .summary-label {
+                font-size: 0.8em;
+            }
+
+            .members-container {
+                flex: 1;
+                padding: 15px;
+                overflow-y: auto;
+            }
+
+            .members-grid {
+                display: flex;
                 flex-direction: column;
                 gap: 10px;
             }
 
-            .header h1 {
-                font-size: 2em;
+            .member-card {
+                background: #f8f9fa;
+                border: 2px solid #e9ecef;
+                border-radius: 10px;
+                padding: 12px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
             }
 
-            .countdown-timer {
-                padding: 6px 12px;
+            .member-info {
+                display: flex;
+                align-items: center;
+                gap: 8px;
             }
 
-            .countdown-label {
-                font-size: 0.6em;
-            }
-
-            .countdown-time {
+            .member-name {
                 font-size: 1em;
+            }
+            
+            .member-buttons {
+                display: flex;
+                gap: 3px;
+                align-items: center;
+                flex-wrap: wrap;
+            }
+
+            .btn {
+                min-width: 50px;
+                padding: 5px 8px;
+                font-size: 0.75em;
+            }
+
+            .btn-pin {
+                min-width: 28px;
+                padding: 4px 6px;
+                font-size: 0.7em;
+            }
+
+            .btn-delete {
+                font-size: 1em;
+                padding: 4px;
+            }
+
+            .add-member-card {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 60px;
+            }
+
+            .btn-add-member-card {
+                padding: 12px 20px;
+                font-size: 0.9em;
+            }
+        }
+
+        @media (min-width: 601px) {
+            .mobile-card-container {
+                display: none;
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <div class="header-top">
-                <h1>📋 AttendCard</h1>
-                <div class="countdown-timer" id="countdownTimer" onclick="app.resetToday()" title="クリックして手動リセット">
-                    <div class="countdown-label">自動リセットまで</div>
-                    <div class="countdown-time" id="countdownTime">--:--:--</div>
-                </div>
-            </div>
-            <div class="date" id="currentDate"></div>
+        <div class="cards-stack" id="attendCards">
+            <!-- 月-金の5枚のAttendCardがここに生成される -->
         </div>
-        
-        <div class="summary">
-            <div class="summary-item attend">
-                <div class="summary-number" id="attendCount">0</div>
-                <div class="summary-label">参加</div>
-            </div>
-            <div class="summary-item absent">
-                <div class="summary-number" id="absentCount">0</div>
-                <div class="summary-label">欠席</div>
-            </div>
-            <div class="summary-item pending">
-                <div class="summary-number" id="pendingCount">0</div>
-                <div class="summary-label">未回答</div>
-            </div>
-            <div class="summary-item total">
-                <div class="summary-number" id="totalCount">0</div>
-                <div class="summary-label">合計</div>
-            </div>
+    </div>
+
+    <!-- Mobile UI -->
+    <div class="mobile-card-container" id="mobileContainer">
+        <div class="mobile-cards-wrapper" id="mobileCardsWrapper">
+            <!-- Mobile cards will be generated here -->
         </div>
-        
-        <div class="members">
-            <div id="membersList" class="loading">
-                読み込み中...
-            </div>
-            <div class="add-member-section">
-                <button class="btn-add-member" onclick="app.showAddMemberDialog()">
-                    ➕ メンバー追加
-                </button>
-            </div>
+        <div class="swipe-indicator" id="swipeIndicator">
+            <!-- Dots will be generated here -->
         </div>
     </div>
 

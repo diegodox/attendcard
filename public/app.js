@@ -2,14 +2,14 @@ class AttendanceApp {
     constructor() {
         this.ws = null;
         this.data = null;
+        this.currentMobileIndex = 0;
         this.init();
     }
 
     init() {
         this.setupWebSocket();
-        this.loadData();
-        this.updateDate();
-        this.startCountdown();
+        this.loadWeekData();
+        this.setupMobileSwipe();
     }
 
     setupWebSocket() {
@@ -23,13 +23,10 @@ class AttendanceApp {
         };
         
         this.ws.onmessage = (event) => {
-            console.log('WebSocket message received:', event.data);
             const message = JSON.parse(event.data);
-            console.log('Parsed message:', message);
-            if (message.type === 'attendance_update') {
-                console.log('Updating UI with new data:', message.data);
+            if (message.type === 'weekly_update') {
                 this.data = message.data;
-                this.render();
+                this.renderWeekDays();
             } else if (message.type === 'auto_reset') {
                 alert(message.message);
             }
@@ -45,101 +42,9 @@ class AttendanceApp {
         };
     }
 
-    async loadData() {
-        try {
-            const response = await fetch('/api/attendance/today');
-            this.data = await response.json();
-            this.render();
-        } catch (error) {
-            console.error('Failed to load data:', error);
-            document.getElementById('membersList').innerHTML = 
-                '<div style="color: #dc3545;">データの読み込みに失敗しました</div>';
-        }
-    }
 
-    updateDate() {
-        const today = new Date();
-        const options = { 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric', 
-            weekday: 'long' 
-        };
-        document.getElementById('currentDate').textContent = 
-            today.toLocaleDateString('ja-JP', options);
-    }
 
-    async updateAttendance(memberId, status) {
-        try {
-            const response = await fetch('/api/attendance', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ memberId, status }),
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to update attendance');
-            }
-            
-            // データは WebSocket 経由で更新される
-        } catch (error) {
-            console.error('Failed to update attendance:', error);
-            alert('更新に失敗しました。もう一度お試しください。');
-        }
-    }
 
-    render() {
-        if (!this.data) return;
-
-        // 合計値を更新
-        document.getElementById('attendCount').textContent = this.data.summary.attend;
-        document.getElementById('absentCount').textContent = this.data.summary.absent;
-        document.getElementById('pendingCount').textContent = this.data.summary.pending;
-        document.getElementById('totalCount').textContent = this.data.summary.total;
-
-        // メンバーカードを生成
-        const membersList = document.getElementById('membersList');
-        membersList.innerHTML = this.data.members.map(member => {
-            const cardClass = member.status ? 
-                (member.status === 'attend' ? 'attending' : 'absent') : '';
-            
-            return `
-                <div class="member-card ${cardClass}">
-                    <div class="member-info">
-                        <span class="status-indicator ${
-                            member.status ? 
-                            (member.status === 'attend' ? 'status-attend' : 'status-absent') : 
-                            'status-pending'
-                        }"></span>
-                        <span class="member-name">${member.name}</span>
-                    </div>
-                    <div class="member-buttons">
-                        <button 
-                            class="btn btn-attend ${member.status === 'attend' ? 'active' : ''}"
-                            onclick="app.updateAttendance(${member.id}, 'attend')"
-                        >
-                            ✓ 参加
-                        </button>
-                        <button 
-                            class="btn btn-absent ${member.status === 'absent' ? 'active' : ''}"
-                            onclick="app.updateAttendance(${member.id}, 'absent')"
-                        >
-                            ✗ 欠席
-                        </button>
-                        <button 
-                            class="btn-delete"
-                            onclick="app.deleteMember(${member.id}, '${member.name}')"
-                            title="メンバーを削除"
-                        >
-                            🗑️
-                        </button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
 
     showAddMemberDialog() {
         const name = prompt('新しいメンバーの名前を入力してください:');
@@ -208,11 +113,10 @@ class AttendanceApp {
                 throw new Error('Failed to reset attendance');
             }
             
-            // Restart countdown timer
-            clearInterval(this.countdownInterval);
-            this.startCountdown();
+            // No countdown timer to restart
             
-            // データは WebSocket 経由で更新される
+            // Reload week data
+            await this.loadWeekData();
         } catch (error) {
             console.error('Failed to reset attendance:', error);
             alert('リセットに失敗しました。もう一度お試しください。');
@@ -220,54 +124,591 @@ class AttendanceApp {
     }
 
     async startCountdown() {
-        try {
-            // Clear existing interval if any
-            if (this.countdownInterval) {
-                clearInterval(this.countdownInterval);
-            }
-            
-            const response = await fetch('/api/next-reset');
-            const { nextReset, timeUntilReset } = await response.json();
-            
-            this.nextResetTime = new Date(nextReset);
-            this.updateCountdown();
-            
-            // Update countdown every second
-            this.countdownInterval = setInterval(() => {
-                this.updateCountdown();
-            }, 1000);
-        } catch (error) {
-            console.error('Failed to get next reset time:', error);
-            document.getElementById('countdownTime').textContent = 'エラー';
-        }
+        // No longer needed - countdown display removed
     }
 
     updateCountdown() {
-        const now = new Date();
-        const timeLeft = this.nextResetTime.getTime() - now.getTime();
+        // No longer needed - countdown display removed
+    }
+
+    getDayNames() {
+        return ['月', '火', '水', '木', '金'];
+    }
+
+    getSinglePinClass(member) {
+        if (member.originalStatus === member.defaultStatus) {
+            // ユーザが明示的に選択した状態とデフォルトが一致 - ステータス別の色
+            if (member.defaultStatus === 'attend') return 'pin-matched-attend';
+            if (member.defaultStatus === 'absent') return 'pin-matched-absent';
+            if (member.defaultStatus === null) return 'pin-matched-pending';
+        } else {
+            // デフォルト設定済みだが現在と違う
+            if (member.defaultStatus === 'attend') return 'pin-default-attend';
+            if (member.defaultStatus === 'absent') return 'pin-default-absent';
+            if (member.defaultStatus === null) return 'pin-default-pending';
+        }
+    }
+
+    getSinglePinIcon(member) {
+        return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pin-angle-fill" viewBox="0 0 16 16"><path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a6 6 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.902-1.414.707s.512-1.22.707-1.414l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a6 6 0 0 1 1.013.16l3.134-3.133a3 3 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146"/></svg>';
+    }
+
+    getSinglePinTooltip(member) {
+        if (member.originalStatus === member.defaultStatus) {
+            return 'デフォルト設定済み（ユーザ選択と一致）';
+        } else {
+            let defaultText;
+            if (member.defaultStatus === 'attend') defaultText = '参加';
+            else if (member.defaultStatus === 'absent') defaultText = '欠席';
+            else defaultText = '未回答';
+            
+            let currentText;
+            if (member.originalStatus === 'attend') currentText = '参加';
+            else if (member.originalStatus === 'absent') currentText = '欠席';
+            else currentText = '未回答';
+            
+            return `デフォルト：${defaultText}（${currentText}をデフォルトに設定）`;
+        }
+    }
+
+    async loadWeekData() {
+        try {
+            const response = await fetch('/api/attendance/week');
+            this.data = await response.json();
+            this.renderWeekDays();
+        } catch (error) {
+            console.error('Failed to load week data:', error);
+            // Fallback to empty data structure
+            this.data = {
+                members: [],
+                weekData: {}
+            };
+            // Initialize empty week structure
+            const dayNames = this.getDayNames();
+            dayNames.forEach(dayName => {
+                this.data.weekData[dayName] = {
+                    day: dayName,
+                    members: []
+                };
+            });
+            this.renderWeekDays();
+        }
+    }
+
+    renderWeekDays() {
+        // Save scroll positions before re-rendering
+        this.saveScrollPositions();
         
-        if (timeLeft <= 0) {
-            // Reset has occurred, reload data and restart countdown
-            this.loadData();
-            this.startCountdown();
-            return;
+        this.renderDesktop();
+        this.renderMobile();
+        
+        // Restore scroll positions after re-rendering
+        setTimeout(() => this.restoreScrollPositions(), 50);
+    }
+
+    saveScrollPositions() {
+        this.scrollPositions = {};
+        
+        // Desktop scroll positions - use day names as keys for more accurate restoration
+        const desktopCards = document.querySelectorAll('#attendCards .attend-card');
+        desktopCards.forEach((card, index) => {
+            const container = card.querySelector('.members-container');
+            if (container) {
+                // Try to get day name from header
+                const header = card.querySelector('.header h1');
+                const dayKey = header ? `desktop-${header.textContent.trim()}` : `desktop-${index}`;
+                this.scrollPositions[dayKey] = container.scrollTop;
+            }
+        });
+        
+        // Mobile scroll positions
+        const mobileCards = document.querySelectorAll('.mobile-card .attend-card');
+        mobileCards.forEach((card, index) => {
+            const container = card.querySelector('.members-container');
+            if (container) {
+                const header = card.querySelector('.header h1');
+                const dayKey = header ? `mobile-${header.textContent.trim()}` : `mobile-${index}`;
+                this.scrollPositions[dayKey] = container.scrollTop;
+            }
+        });
+    }
+
+    restoreScrollPositions() {
+        if (!this.scrollPositions) return;
+        
+        // Restore desktop scroll positions
+        const desktopCards = document.querySelectorAll('#attendCards .attend-card');
+        desktopCards.forEach((card, index) => {
+            const container = card.querySelector('.members-container');
+            if (container) {
+                const header = card.querySelector('.header h1');
+                const dayKey = header ? `desktop-${header.textContent.trim()}` : `desktop-${index}`;
+                const savedPosition = this.scrollPositions[dayKey];
+                if (savedPosition !== undefined) {
+                    container.scrollTop = savedPosition;
+                }
+            }
+        });
+        
+        // Restore mobile scroll positions
+        const mobileCards = document.querySelectorAll('.mobile-card .attend-card');
+        mobileCards.forEach((card, index) => {
+            const container = card.querySelector('.members-container');
+            if (container) {
+                const header = card.querySelector('.header h1');
+                const dayKey = header ? `mobile-${header.textContent.trim()}` : `mobile-${index}`;
+                const savedPosition = this.scrollPositions[dayKey];
+                if (savedPosition !== undefined) {
+                    container.scrollTop = savedPosition;
+                }
+            }
+        });
+    }
+
+    renderDesktop() {
+        const cardsContainer = document.getElementById('attendCards');
+        const today = new Date().getDay(); // 0=日, 1=月, 2=火, 3=水, 4=木, 5=金, 6=土
+        
+        // Remove existing event listeners
+        cardsContainer.removeEventListener('click', this.handleCardClick);
+        
+        // Add event listener for all buttons
+        this.handleCardClick = this.handleCardClick.bind(this);
+        cardsContainer.addEventListener('click', this.handleCardClick);
+        
+        // Get all 5 weekdays in chronological order
+        const dayNames = this.getDayNames();
+        const todayDate = new Date();
+        const currentDay = todayDate.getDay(); // 0=日, 1=月, 2=火, 3=水, 4=木, 5=金, 6=土
+        
+        // Create ordered list of days starting from today
+        let orderedDays = [];
+        let tempDate = new Date(todayDate);
+        let todayIndex = -1; // Index of today's card in the array
+        
+        // If weekend, start from next Monday
+        if (currentDay === 0) { // Sunday
+            tempDate.setDate(todayDate.getDate() + 1);
+        } else if (currentDay === 6) { // Saturday  
+            tempDate.setDate(todayDate.getDate() + 2);
         }
         
-        const hours = Math.floor(timeLeft / (1000 * 60 * 60));
-        const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+        // Collect 5 weekdays in order
+        let collected = 0;
+        while (collected < 5) {
+            const dayOfWeek = tempDate.getDay();
+            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                const dayName = dayNames[dayOfWeek - 1];
+                orderedDays.push(dayName);
+                
+                // Mark today's index for centering
+                if (dayOfWeek === today) {
+                    todayIndex = collected;
+                }
+                
+                collected++;
+            }
+            tempDate.setDate(tempDate.getDate() + 1);
+        }
         
-        const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        document.getElementById('countdownTime').textContent = timeString;
+        // If today is weekday, find today's index
+        if (today >= 1 && today <= 5 && todayIndex === -1) {
+            todayIndex = 0; // Today is the first card
+        }
         
-        // Change color when close to reset time
-        const countdownElement = document.getElementById('countdownTimer');
-        if (timeLeft < 5 * 60 * 1000) { // Last 5 minutes
-            countdownElement.style.background = 'rgba(220, 53, 69, 0.3)';
-        } else if (timeLeft < 30 * 60 * 1000) { // Last 30 minutes
-            countdownElement.style.background = 'rgba(255, 193, 7, 0.3)';
-        } else {
-            countdownElement.style.background = 'rgba(255, 255, 255, 0.2)';
+        
+        cardsContainer.innerHTML = orderedDays.map((dayName, displayIndex) => {
+            return this.generateCardHTML(dayName, today, dayNames);
+        }).join('');
+        
+        // Center today's card by scrolling
+        if (todayIndex >= 0) {
+            setTimeout(() => {
+                const todayCard = cardsContainer.children[todayIndex];
+                if (todayCard) {
+                    // Scroll to today's card
+                    const cardWidth = 800;
+                    const gap = 20;
+                    const paddingElement = Math.max(0, (window.innerWidth / 2) - 400 - 20);
+                    
+                    // Calculate position including the ::before pseudo element
+                    const scrollPosition = paddingElement + (todayIndex * (cardWidth + gap));
+                    
+                    cardsContainer.scrollTo({
+                        left: scrollPosition,
+                        behavior: 'smooth'
+                    });
+                }
+            }, 100);
+        }
+        
+        // Re-add event listener after DOM update
+        cardsContainer.removeEventListener('click', this.handleCardClick);
+        cardsContainer.addEventListener('click', this.handleCardClick);
+    }
+
+    renderMobile() {
+        const mobileContainer = document.getElementById('mobileCardsWrapper');
+        const indicatorContainer = document.getElementById('swipeIndicator');
+        
+        // Get ordered days
+        const dayNames = this.getDayNames();
+        const todayDate = new Date();
+        const currentDay = todayDate.getDay();
+        const today = currentDay;
+        
+        let orderedDays = [];
+        let tempDate = new Date(todayDate);
+        
+        // If weekend, start from next Monday
+        if (currentDay === 0) { // Sunday
+            tempDate.setDate(todayDate.getDate() + 1);
+        } else if (currentDay === 6) { // Saturday  
+            tempDate.setDate(todayDate.getDate() + 2);
+        }
+        
+        // Collect 5 weekdays in order
+        let collected = 0;
+        while (collected < 5) {
+            const dayOfWeek = tempDate.getDay();
+            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                const dayName = dayNames[dayOfWeek - 1];
+                orderedDays.push(dayName);
+                collected++;
+            }
+            tempDate.setDate(tempDate.getDate() + 1);
+        }
+
+        // Render mobile cards
+        mobileContainer.innerHTML = orderedDays.map((dayName, index) => {
+            return `
+                <div class="mobile-card">
+                    ${this.generateCardHTML(dayName, today, dayNames)}
+                </div>
+            `;
+        }).join('');
+
+        // Render swipe indicators
+        indicatorContainer.innerHTML = orderedDays.map((_, index) => {
+            return `<div class="swipe-dot ${index === this.currentMobileIndex ? 'active' : ''}"></div>`;
+        }).join('');
+
+        // Remove existing mobile event listeners
+        if (this.handleMobileCardClick) {
+            mobileContainer.removeEventListener('click', this.handleMobileCardClick);
+        }
+        
+        // Add event listeners to mobile cards
+        this.handleMobileCardClick = this.handleMobileCardClick.bind(this);
+        mobileContainer.addEventListener('click', this.handleMobileCardClick);
+    }
+
+    generateCardHTML(dayName, today, dayNames) {
+        const dayData = this.data.weekData[dayName];
+        const dayIndex = dayNames.indexOf(dayName) + 1; // 月=1, 火=2, 水=3, 木=4, 金=5
+        const isToday = today === dayIndex;
+        
+        const attendCount = dayData.members.filter(m => m.status === 'attend').length;
+        const absentCount = dayData.members.filter(m => m.status === 'absent').length;
+        const pendingCount = dayData.members.filter(m => m.status === null).length;
+        const totalCount = dayData.members.length;
+        
+        // Format date from dayData.date (YYYY-MM-DD) to readable format
+        const dateObj = new Date(dayData.date);
+        const formattedDate = dateObj.toLocaleDateString('ja-JP', {
+            month: 'numeric',
+            day: 'numeric',
+            weekday: 'short'
+        });
+
+        return `
+            <div class="attend-card ${isToday ? 'today' : ''}">
+                <div class="header">
+                    <div class="header-top">
+                        <h1>📋 ${formattedDate}</h1>
+                    </div>
+                </div>
+                
+                <div class="summary">
+                    <div class="summary-item attend">
+                        <div class="summary-number">${attendCount}</div>
+                        <div class="summary-label">参加</div>
+                    </div>
+                    <div class="summary-item absent">
+                        <div class="summary-number">${absentCount}</div>
+                        <div class="summary-label">欠席</div>
+                    </div>
+                    <div class="summary-item pending">
+                        <div class="summary-number">${pendingCount}</div>
+                        <div class="summary-label">未回答</div>
+                    </div>
+                    <div class="summary-item total">
+                        <div class="summary-number">${totalCount}</div>
+                        <div class="summary-label">合計</div>
+                    </div>
+                </div>
+                
+                <div class="members-container">
+                    <div class="members-grid">
+                        ${dayData.members.map(member => {
+                            const cardClass = member.status ? 
+                                (member.status === 'attend' ? 'attending' : 'absent') : '';
+                            
+                            return `
+                                <div class="member-card ${cardClass}">
+                                    <div class="member-info">
+                                        <span class="status-indicator ${
+                                            member.status ? 
+                                            (member.status === 'attend' ? 'status-attend' : 'status-absent') : 
+                                            'status-pending'
+                                        }"></span>
+                                        <span class="member-name">${member.name}</span>
+                                    </div>
+                                    <div class="member-buttons">
+                                        <button 
+                                            class="btn-pin ${this.getSinglePinClass(member)}"
+                                            data-day="${dayName}"
+                                            data-member-id="${member.id}"
+                                            data-action="pin-current"
+                                            title="${this.getSinglePinTooltip(member)}"
+                                        >
+                                            ${this.getSinglePinIcon(member)}
+                                        </button>
+                                        <button 
+                                            class="btn btn-attend ${member.originalStatus === 'attend' ? 'active' : ''}"
+                                            data-day="${dayName}"
+                                            data-member-id="${member.id}"
+                                            data-action="attend"
+                                        >
+                                            ✓ 参加
+                                        </button>
+                                        <button 
+                                            class="btn btn-absent ${member.originalStatus === 'absent' ? 'active' : ''}"
+                                            data-day="${dayName}"
+                                            data-member-id="${member.id}"
+                                            data-action="absent"
+                                        >
+                                            ✗ 欠席
+                                        </button>
+                                        <button 
+                                            class="btn-delete"
+                                            data-member-id="${member.id}"
+                                            data-member-name="${member.name}"
+                                            data-action="delete"
+                                            title="メンバーを削除"
+                                        >
+                                            🗑️
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                        
+                        <div class="add-member-card">
+                            <button class="btn-add-member-card" data-action="add-member">
+                                ➕ メンバー追加
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    setupMobileSwipe() {
+        const mobileContainer = document.getElementById('mobileContainer');
+        const wrapper = document.getElementById('mobileCardsWrapper');
+        
+        let startX = 0;
+        let currentX = 0;
+        let isDragging = false;
+
+        // Touch events for mobile
+        mobileContainer.addEventListener('touchstart', (e) => {
+            // Don't initiate swipe if touching a button
+            if (e.target.closest('button')) {
+                return;
+            }
+            startX = e.touches[0].clientX;
+            isDragging = true;
+            wrapper.style.transition = 'none';
+        });
+
+        mobileContainer.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+            currentX = e.touches[0].clientX;
+            const diff = currentX - startX;
+            const currentTransform = -(this.currentMobileIndex * 20);
+            wrapper.style.transform = `translateX(${currentTransform + (diff / window.innerWidth) * 20}%)`;
+        });
+
+        mobileContainer.addEventListener('touchend', (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            wrapper.style.transition = 'transform 0.3s ease';
+            
+            const diff = currentX - startX;
+            const threshold = window.innerWidth * 0.2; // 20% of screen width
+
+            if (Math.abs(diff) > threshold) {
+                if (diff > 0 && this.currentMobileIndex > 0) {
+                    // Swipe right - go to previous day
+                    this.currentMobileIndex--;
+                } else if (diff < 0 && this.currentMobileIndex < 4) {
+                    // Swipe left - go to next day
+                    this.currentMobileIndex++;
+                }
+            }
+
+            // Update position and indicators
+            this.updateMobilePosition();
+        });
+
+        // Mouse events for desktop testing
+        mobileContainer.addEventListener('mousedown', (e) => {
+            // Don't initiate swipe if clicking a button
+            if (e.target.closest('button')) {
+                return;
+            }
+            startX = e.clientX;
+            isDragging = true;
+            wrapper.style.transition = 'none';
+            e.preventDefault();
+        });
+
+        mobileContainer.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            currentX = e.clientX;
+            const diff = currentX - startX;
+            const currentTransform = -(this.currentMobileIndex * 20);
+            wrapper.style.transform = `translateX(${currentTransform + (diff / window.innerWidth) * 20}%)`;
+        });
+
+        mobileContainer.addEventListener('mouseup', (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            wrapper.style.transition = 'transform 0.3s ease';
+            
+            const diff = currentX - startX;
+            const threshold = window.innerWidth * 0.2;
+
+            if (Math.abs(diff) > threshold) {
+                if (diff > 0 && this.currentMobileIndex > 0) {
+                    this.currentMobileIndex--;
+                } else if (diff < 0 && this.currentMobileIndex < 4) {
+                    this.currentMobileIndex++;
+                }
+            }
+
+            this.updateMobilePosition();
+        });
+    }
+
+    updateMobilePosition() {
+        const wrapper = document.getElementById('mobileCardsWrapper');
+        const indicators = document.querySelectorAll('.swipe-dot');
+        
+        wrapper.style.transform = `translateX(-${this.currentMobileIndex * 20}%)`;
+        
+        indicators.forEach((dot, index) => {
+            dot.classList.toggle('active', index === this.currentMobileIndex);
+        });
+    }
+
+    handleMobileCardClick(event) {
+        // Use the same logic as desktop
+        this.handleCardClick(event);
+    }
+
+    handleCardClick(event) {
+        const button = event.target.closest('button');
+        if (!button) return;
+        
+        const action = button.dataset.action;
+        
+        if (!action) return;
+        
+        event.preventDefault();
+        
+        if (action === 'attend' || action === 'absent') {
+            const dayName = button.dataset.day;
+            const memberId = parseInt(button.dataset.memberId);
+            this.updateDayAttendance(dayName, memberId, action);
+        } else if (action === 'delete') {
+            const memberId = parseInt(button.dataset.memberId);
+            const memberName = button.dataset.memberName;
+            this.deleteMember(memberId, memberName);
+        } else if (action === 'pin-current') {
+            const dayName = button.dataset.day;
+            const memberId = parseInt(button.dataset.memberId);
+            this.pinCurrentSelection(dayName, memberId);
+        } else if (action === 'add-member') {
+            this.showAddMemberDialog();
+        }
+    }
+
+    async updateDayAttendance(dayName, memberId, status) {
+        try {
+            
+            // ユーザが明示的に選択した状態と同じならトグルしてnullにする
+            const currentMember = this.data.weekData[dayName].members.find(m => m.id === memberId);
+            const newStatus = currentMember.originalStatus === status ? null : status;
+            
+            
+            const response = await fetch('/api/attendance/weekly', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ dayName, memberId, status: newStatus }),
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to update attendance');
+            }
+            
+            // データはWebSocket経由で更新される
+        } catch (error) {
+            console.error('Failed to update weekly attendance:', error);
+            alert('更新に失敗しました。もう一度お試しください。');
+        }
+    }
+
+    async pinCurrentSelection(dayName, memberId) {
+        try {
+            
+            // Find current member data
+            const currentMember = this.data.weekData[dayName].members.find(m => m.id === memberId);
+            
+            // If already matched (pin-matched-*), do nothing
+            if (currentMember.defaultStatus === currentMember.originalStatus) {
+                return;
+            }
+            
+            // Set user's explicit selection as default (can be 'attend', 'absent', or 'pending' for null)
+            const newDefaultStatus = currentMember.originalStatus === null ? "pending" : currentMember.originalStatus;
+            
+            const response = await fetch('/api/member-defaults', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    memberId: memberId, 
+                    dayName: dayName, 
+                    status: newDefaultStatus 
+                }),
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to update member default');
+            }
+            
+            // データはWebSocket経由で更新される
+        } catch (error) {
+            console.error('Failed to update member default:', error);
+            alert('デフォルト設定の更新に失敗しました。もう一度お試しください。');
         }
     }
 }
