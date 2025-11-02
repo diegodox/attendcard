@@ -40,7 +40,7 @@ fastify.addHook('preHandler', async (request, reply) => {
   }
 });
 
-// Security headers
+// Security headers and no-cache
 fastify.addHook('onSend', async (request, reply, payload) => {
   // Basic security headers
   reply.header('X-Content-Type-Options', 'nosniff');
@@ -49,6 +49,11 @@ fastify.addHook('onSend', async (request, reply, payload) => {
   reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   reply.header('X-Download-Options', 'noopen');
   reply.header('X-Permitted-Cross-Domain-Policies', 'none');
+  
+  // No-cache headers
+  reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+  reply.header('Pragma', 'no-cache');
+  reply.header('Expires', '0');
   
   // Content Security Policy
   reply.header('Content-Security-Policy', 
@@ -71,10 +76,15 @@ fastify.addHook('onSend', async (request, reply, payload) => {
 // WebSocket support
 fastify.register(require('@fastify/websocket'));
 
-// Static files
+// Static files with no-cache
 fastify.register(require('@fastify/static'), {
   root: path.join(__dirname, '../public'),
   prefix: '/',
+  setHeaders(res /*, path, stat */) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
 });
 
 // Lightweight mobile page

@@ -502,14 +502,14 @@ class AttendanceApp {
         let currentX = 0;
         let isDragging = false;
 
-        // Simple swipe detection - no overlay elements
+        // Vertical scroll priority swipe detection
         let swipeStartX = 0;
         let swipeStartY = 0;
         let swipeStartTime = 0;
         
         mobileContainer.addEventListener('touchstart', (e) => {
-            // Only start swipe detection in non-scrollable areas
-            if (e.target.closest('.members-container')) {
+            // Only start swipe detection in header/summary areas
+            if (!e.target.closest('.header') && !e.target.closest('.summary')) {
                 return;
             }
             
@@ -519,19 +519,25 @@ class AttendanceApp {
         }, { passive: true });
 
         mobileContainer.addEventListener('touchend', (e) => {
-            if (e.target.closest('.members-container')) {
+            // Only process swipe in header/summary areas
+            if (!e.target.closest('.header') && !e.target.closest('.summary')) {
                 return;
             }
             
             const deltaTime = Date.now() - swipeStartTime;
-            if (deltaTime > 500) return; // Too slow
+            if (deltaTime > 300) return; // Faster time requirement
             
             const touch = e.changedTouches[0];
             const deltaX = touch.clientX - swipeStartX;
             const deltaY = touch.clientY - swipeStartY;
             
-            // Check if it's a horizontal swipe
-            if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+            // Much stricter horizontal swipe requirements
+            // Horizontal movement must be at least 3x larger than vertical
+            const isHorizontalSwipe = Math.abs(deltaX) > Math.abs(deltaY) * 3 && 
+                                     Math.abs(deltaX) > 80 && 
+                                     Math.abs(deltaY) < 30;
+            
+            if (isHorizontalSwipe) {
                 if (deltaX > 0 && this.currentMobileIndex > 0) {
                     // Swipe right
                     this.currentMobileIndex--;

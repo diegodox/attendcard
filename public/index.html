@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>AttendCard - 出席管理</title>
     <style>
         * {
@@ -744,15 +747,17 @@
                 overflow-y: auto;
                 overflow-x: hidden;
                 -webkit-overflow-scrolling: touch;
-                overscroll-behavior-y: contain;
+                overscroll-behavior-y: auto;
+                overscroll-behavior-x: none;
                 pointer-events: auto;
-                touch-action: pan-y pinch-zoom;
+                touch-action: pan-y;
                 position: relative;
                 z-index: 2;
                 min-height: 200px;
                 box-sizing: border-box;
                 height: calc(100svh - 200px);
                 max-height: calc(100dvh - 200px);
+                scroll-behavior: smooth;
             }
 
             .members-grid {
