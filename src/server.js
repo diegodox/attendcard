@@ -187,55 +187,142 @@ fastify.get('/api/attendance/week', async (request, reply) => {
   }
 });
 
-// Helper function to get week data
+// Cache for optimized week data
+let weekDataCache = null;
+let cacheTimestamp = 0;
+const CACHE_DURATION = 1000; // 1 second cache
+
+// Helper function to get week data with caching
 async function getWeekData() {
-  const members = await new Promise((resolve, reject) => {
-    db.all('SELECT * FROM members ORDER BY created_at ASC', (err, rows) => {
+  const now = Date.now();
+  
+  // Return cached data if still valid
+  if (weekDataCache && (now - cacheTimestamp) < CACHE_DURATION) {
+    return weekDataCache;
+  }
+
+  // Calculate dates once
+  const dayNames = ['月', '火', '水', '木', '金'];
+  const currentDay = new Date().getDay();
+  const dates = calculateWeekDates(dayNames, currentDay);
+  const dateStrings = dates.map(d => d.dateString);
+  
+  // Single optimized query to get all required data
+  const allData = await new Promise((resolve, reject) => {
+    const query = `
+      SELECT 
+        m.id as member_id,
+        m.name as member_name,
+        m.created_at as member_created_at,
+        md.day_of_week,
+        md.default_status,
+        a.date as attendance_date,
+        a.status as attendance_status
+      FROM members m
+      LEFT JOIN member_defaults md ON m.id = md.member_id
+      LEFT JOIN attendance a ON m.id = a.member_id 
+        AND a.date IN (${dateStrings.map(() => '?').join(',')})
+      ORDER BY m.created_at ASC, md.day_of_week ASC
+    `;
+    
+    db.all(query, dateStrings, (err, rows) => {
       if (err) reject(err);
       else resolve(rows);
     });
   });
 
-  // Get member defaults
-  const memberDefaults = await new Promise((resolve, reject) => {
-    db.all('SELECT * FROM member_defaults', (err, rows) => {
-      if (err) reject(err);
-      else {
-        resolve(rows);
-      }
-    });
-  });
+  // Process data efficiently
+  const membersMap = new Map();
+  const attendanceMap = new Map();
+  const defaultsMap = new Map();
 
+  // Single pass to organize all data
+  for (const row of allData) {
+    const memberId = row.member_id;
+    
+    // Build members map
+    if (!membersMap.has(memberId)) {
+      membersMap.set(memberId, {
+        id: memberId,
+        name: row.member_name,
+        created_at: row.member_created_at
+      });
+    }
+    
+    // Build attendance map
+    if (row.attendance_date) {
+      const key = `${memberId}-${row.attendance_date}`;
+      attendanceMap.set(key, row.attendance_status);
+    }
+    
+    // Build defaults map
+    if (row.day_of_week !== null) {
+      const key = `${memberId}-${row.day_of_week}`;
+      defaultsMap.set(key, row.default_status);
+    }
+  }
+
+  const members = Array.from(membersMap.values());
   const weekData = {};
-  const dayNames = ['月', '火', '水', '木', '金'];
+
+  // Build week data efficiently
+  for (const { dayName, dateString } of dates) {
+    const dayIndex = dayNames.indexOf(dayName) + 1;
+    
+    weekData[dayName] = {
+      day: dayName,
+      date: dateString,
+      members: members.map(member => {
+        const attendanceKey = `${member.id}-${dateString}`;
+        const defaultKey = `${member.id}-${dayIndex}`;
+        
+        const currentStatus = attendanceMap.get(attendanceKey) || null;
+        const defaultStatus = defaultsMap.get(defaultKey) || null;
+        
+        const appliedStatus = (currentStatus === null && defaultStatus !== undefined) ? defaultStatus : currentStatus;
+        
+        return {
+          ...member,
+          status: appliedStatus,
+          originalStatus: currentStatus,
+          defaultStatus: defaultStatus
+        };
+      })
+    };
+  }
+
+  const result = { members, weekData };
   
-  // Get 5 weekdays starting from today
+  // Update cache
+  weekDataCache = result;
+  cacheTimestamp = now;
+  
+  return result;
+}
+
+// Helper function to calculate week dates
+function calculateWeekDates(dayNames, currentDay) {
   const now = new Date();
-  const currentDay = now.getDay(); // 0=日, 1=月, 2=火, 3=水, 4=木, 5=金, 6=土
-  
-  const dates = [];
   let currentDate = new Date(now);
   
   // If today is weekend, start from next Monday
   if (currentDay === 0) { // Sunday
-    currentDate.setDate(now.getDate() + 1); // Next Monday
+    currentDate.setDate(now.getDate() + 1);
   } else if (currentDay === 6) { // Saturday
-    currentDate.setDate(now.getDate() + 2); // Next Monday
+    currentDate.setDate(now.getDate() + 2);
   }
-  // If weekday, start from today
   
-  // Collect exactly 5 weekdays starting from current date
+  const dates = [];
   let daysCollected = 0;
   
   while (daysCollected < 5) {
     const dayOfWeek = currentDate.getDay();
     
-    // Only process weekdays (Monday=1 to Friday=5)
     if (dayOfWeek >= 1 && dayOfWeek <= 5) {
       const dayName = dayNames[dayOfWeek - 1];
       dates.push({
-        date: new Date(currentDate),
-        dayName: dayName
+        dayName,
+        dateString: currentDate.toISOString().split('T')[0]
       });
       daysCollected++;
     }
@@ -243,62 +330,13 @@ async function getWeekData() {
     currentDate.setDate(currentDate.getDate() + 1);
   }
   
-  // Now process each collected date
-  for (const { date, dayName } of dates) {
-    const dateString = date.toISOString().split('T')[0];
-    
-    // Get attendance for this day
-    const attendanceData = await new Promise((resolve, reject) => {
-      db.all('SELECT member_id, status FROM attendance WHERE date = ?', [dateString], (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows);
-      });
-    });
-    
-    const attendanceMap = {};
-    attendanceData.forEach(record => {
-      attendanceMap[record.member_id] = record.status;
-    });
-    
-    
-    // Get day of week index (1=月, 2=火, 3=水, 4=木, 5=金)
-    const dayIndex = dayNames.indexOf(dayName) + 1;
-    
-    // Create defaults map for this day
-    const defaultsMap = {};
-    memberDefaults.forEach(def => {
-      if (def.day_of_week === dayIndex) {
-        defaultsMap[def.member_id] = def.default_status;
-      }
-    });
-    
-    weekData[dayName] = {
-      day: dayName,
-      date: dateString,
-      members: members.map(member => {
-        const currentStatus = attendanceMap[member.id] || null;
-        const defaultStatus = defaultsMap.hasOwnProperty(member.id) ? defaultsMap[member.id] : null;
-        
-        // If user status is null (未回答) and there's a default (including null default), apply the default
-        const appliedStatus = (currentStatus === null && defaultStatus !== undefined) ? defaultStatus : currentStatus;
-        
-        const result = {
-          ...member,
-          status: appliedStatus,
-          originalStatus: currentStatus, // ユーザが明示的に選択したステータス
-          defaultStatus: defaultStatus
-        };
-        
-        
-        return result;
-      })
-    };
-  }
-  
-  return {
-    members,
-    weekData
-  };
+  return dates;
+}
+
+// Function to invalidate cache when data changes
+function invalidateWeekDataCache() {
+  weekDataCache = null;
+  cacheTimestamp = 0;
 }
 
 
@@ -385,16 +423,19 @@ fastify.post('/api/attendance/weekly', async (request, reply) => {
       });
     }
     
-    // Broadcast weekly update to all clients
-    fastify.inject({
-      method: 'GET',
-      url: '/api/attendance/week'
-    }).then(response => {
+    // Invalidate cache and broadcast update
+    invalidateWeekDataCache();
+    
+    // Get fresh data and broadcast directly (faster than HTTP inject)
+    try {
+      const weekData = await getWeekData();
       broadcast({
         type: 'weekly_update',
-        data: JSON.parse(response.payload)
+        data: weekData
       });
-    });
+    } catch (error) {
+      console.error('Error broadcasting weekly update:', error);
+    }
     
     reply.send({ success: true });
   } catch (error) {
@@ -442,16 +483,19 @@ fastify.post('/api/member-defaults', async (request, reply) => {
       });
     }
     
-    // Broadcast updated data
-    fastify.inject({
-      method: 'GET',
-      url: '/api/attendance/week'
-    }).then(response => {
+    // Invalidate cache and broadcast update
+    invalidateWeekDataCache();
+    
+    // Get fresh data and broadcast directly
+    try {
+      const weekData = await getWeekData();
       broadcast({
         type: 'weekly_update',
-        data: JSON.parse(response.payload)
+        data: weekData
       });
-    });
+    } catch (error) {
+      console.error('Error broadcasting member default update:', error);
+    }
     
     reply.send({ success: true });
   } catch (error) {
@@ -512,7 +556,8 @@ fastify.post('/api/members', async (request, reply) => {
         }
         defaultStmt.finalize();
         
-        // Broadcast weekly update to all clients
+        // Invalidate cache and broadcast update
+        invalidateWeekDataCache();
         getWeekData().then(data => {
           broadcast({
             type: 'weekly_update',
@@ -560,7 +605,8 @@ fastify.delete('/api/members/:id', async (request, reply) => {
             return;
           }
           
-          // Broadcast weekly update to all clients
+          // Invalidate cache and broadcast update
+          invalidateWeekDataCache();
           getWeekData().then(data => {
             broadcast({
               type: 'weekly_update',
@@ -587,7 +633,8 @@ fastify.post('/api/attendance/reset', async (request, reply) => {
       } else {
         console.log(`Reset attendance for ${today}, deleted ${this.changes} records`);
         
-        // Broadcast weekly update to all clients
+        // Invalidate cache and broadcast weekly update to all clients
+        invalidateWeekDataCache();
         getWeekData().then(data => {
           broadcast({
             type: 'weekly_update',
@@ -633,19 +680,19 @@ function scheduleAutoReset() {
       } else {
         console.log(`Auto-reset completed: deleted ${this.changes} records for ${today}`);
         
-        // Broadcast weekly update to all clients
-        fastify.inject({
-          method: 'GET',
-          url: '/api/attendance/week'
-        }).then(response => {
+        // Invalidate cache and broadcast weekly update to all clients
+        invalidateWeekDataCache();
+        getWeekData().then(data => {
           broadcast({
             type: 'weekly_update',
-            data: JSON.parse(response.payload)
+            data: data
           });
           broadcast({
             type: 'auto_reset',
             message: '13時になりました。出席状況がリセットされました。'
           });
+        }).catch(err => {
+          console.error('Error broadcasting auto-reset update:', err);
         });
       }
     });
